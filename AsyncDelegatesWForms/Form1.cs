@@ -4,17 +4,13 @@ namespace AsyncDelegatesWForms
     public partial class Form1 : Form
     {
         private SynchronizationContext sC = null;
-        CopyingThread copyThread = null;
-        AsyncCallback showMessage = null;
         public Form1()
         {
             InitializeComponent();
             sC = SynchronizationContext.Current;
-            copyThread = CopyMethod;
-            showMessage = ShowSuccess;
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private async void button1_Click(object sender, EventArgs e)
         {
             if (String.IsNullOrEmpty(fromPath.Text) || String.IsNullOrEmpty(toPath.Text))
             {
@@ -28,10 +24,11 @@ namespace AsyncDelegatesWForms
                 return;
             }
 
-            IAsyncResult ar = copyThread.BeginInvoke(fromPath.Text, toPath.Text, showMessage,null);
+            await Task.Run(() => CopyMethod(fromPath.Text, toPath.Text));
+            ShowSuccess();
         }
 
-        private void CopyMethod(string sourceFilePath, string destinationFilePath)
+        private async Task CopyMethod(string sourceFilePath, string destinationFilePath)
         {
             const int bufferSize = 4096;
             try
@@ -41,25 +38,25 @@ namespace AsyncDelegatesWForms
                     using (FileStream destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write))
                     {
                         long totalBytes = sourceStream.Length;
-                        long copiedBytes = 0; 
+                        long copiedBytes = 0;
                         byte[] buffer = new byte[bufferSize];
                         int bytesRead;
 
                         sC.Send(_ => progressBar1.Maximum = 100, null);
                         sC.Send(_ => progressBar1.Value = 0, null);
 
-                        while ((bytesRead = sourceStream.Read(buffer, 0, buffer.Length)) > 0)
+                        while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                         {
-                            destinationStream.Write(buffer, 0, bytesRead);
+                            await destinationStream.WriteAsync(buffer, 0, bytesRead);
                             copiedBytes += bytesRead;
 
                             int progress = (int)((copiedBytes * 100) / totalBytes);
 
                             sC.Send(_ => progressBar1.Value = progress, null);
+                            await Task.Delay(300);
                         }
                     }
                 }
-
             }
             catch (Exception ex)
             {
@@ -69,7 +66,8 @@ namespace AsyncDelegatesWForms
 
 
 
-        private void ShowSuccess(IAsyncResult ar)
+
+        private void ShowSuccess()
         {
             MessageBox.Show("Copying was successful","Finish",MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
