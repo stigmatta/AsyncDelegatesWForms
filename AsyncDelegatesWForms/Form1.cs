@@ -1,9 +1,12 @@
-namespace AsyncDelegatesWForms
+ï»¿namespace AsyncDelegatesWForms
 {
     public delegate void CopyingThread(string fromPath, string toPath);
+
     public partial class Form1 : Form
     {
         private SynchronizationContext sC = null;
+        private CancellationTokenSource cts;
+
         public Form1()
         {
             InitializeComponent();
@@ -12,64 +15,87 @@ namespace AsyncDelegatesWForms
 
         private async void button1_Click(object sender, EventArgs e)
         {
-            if (String.IsNullOrEmpty(fromPath.Text) || String.IsNullOrEmpty(toPath.Text))
+            if (string.IsNullOrEmpty(fromPath.Text) || string.IsNullOrEmpty(toPath.Text))
             {
-                MessageBox.Show("Some of the fields are empty", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Some of the fields are empty",
+                    "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             if (!File.Exists(fromPath.Text) || !File.Exists(toPath.Text))
             {
-                MessageBox.Show("One or both of the paths do not exist", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("One or both of the paths do not exist",
+                    "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            await Task.Run(() => CopyMethod(fromPath.Text, toPath.Text));
-            ShowSuccess();
-        }
+            cts = new CancellationTokenSource();
 
-        private async Task CopyMethod(string sourceFilePath, string destinationFilePath)
-        {
-            const int bufferSize = 4096;
             try
             {
-                using (FileStream sourceStream = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read))
-                {
-                    using (FileStream destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write))
-                    {
-                        long totalBytes = sourceStream.Length;
-                        long copiedBytes = 0;
-                        byte[] buffer = new byte[bufferSize];
-                        int bytesRead;
-
-                        sC.Send(_ => progressBar1.Maximum = 100, null);
-                        sC.Send(_ => progressBar1.Value = 0, null);
-
-                        while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                        {
-                            await destinationStream.WriteAsync(buffer, 0, bytesRead);
-                            copiedBytes += bytesRead;
-
-                            int progress = (int)((copiedBytes * 100) / totalBytes);
-
-                            sC.Send(_ => progressBar1.Value = progress, null);
-                            await Task.Delay(300);
-                        }
-                    }
-                }
+                await CopyMethod(fromPath.Text, toPath.Text, cts.Token);
+                ShowSuccess();
+            }
+            catch (OperationCanceledException)
+            {
+                MessageBox.Show("Task is cancelled");
+                sC.Send(_ => progressBar1.Value = 0,null);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Îøèáêà ïðè êîïèðîâàíèè ôàéëà: {ex.Message}", "Îøèáêà", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Unexpected error: {ex.Message}");
             }
         }
 
+        private Task CopyMethod(string sourceFilePath, string destinationFilePath, CancellationToken token)
+        {
+            const int bufferSize = 4096;
 
+            return Task.Factory.StartNew(() =>
+            {
+                token.ThrowIfCancellationRequested();
 
+                using (FileStream sourceStream = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read))
+                using (FileStream destinationStream = new FileStream(destinationFilePath, FileMode.Create, FileAccess.Write))
+                {
+                    long totalBytes = sourceStream.Length;
+                    long copiedBytes = 0;
+                    byte[] buffer = new byte[bufferSize];
+                    int bytesRead;
+
+                    sC.Send(_ =>
+                    {
+                        progressBar1.Maximum = 100;
+                        progressBar1.Value = 0;
+                    }, null);
+
+                    while ((bytesRead = sourceStream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        token.ThrowIfCancellationRequested();
+
+                        destinationStream.Write(buffer, 0, bytesRead);
+                        copiedBytes += bytesRead;
+
+                        int progress = (int)((copiedBytes * 100) / totalBytes);
+                        sC.Send(_ => progressBar1.Value = progress, null);
+
+                        Task.Delay(1000, token).Wait(token);
+                    }
+                }
+            },
+            token,                          
+            TaskCreationOptions.LongRunning,  
+            TaskScheduler.Default);
+        }
 
         private void ShowSuccess()
         {
-            MessageBox.Show("Copying was successful","Finish",MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Copying is finished", "Finish", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void buttonStop_Click(object sender, EventArgs e)
+        {
+            cts?.Cancel();
         }
     }
 }

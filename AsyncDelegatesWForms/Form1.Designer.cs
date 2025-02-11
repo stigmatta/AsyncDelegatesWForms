@@ -34,6 +34,7 @@
             toPath = new TextBox();
             progressBar1 = new ProgressBar();
             button1 = new Button();
+            buttonStop = new Button();
             SuspendLayout();
             // 
             // label1
@@ -77,7 +78,7 @@
             // 
             // button1
             // 
-            button1.Location = new Point(343, 106);
+            button1.Location = new Point(235, 106);
             button1.Name = "button1";
             button1.Size = new Size(90, 23);
             button1.TabIndex = 5;
@@ -85,11 +86,22 @@
             button1.UseVisualStyleBackColor = true;
             button1.Click += button1_Click;
             // 
+            // buttonStop
+            // 
+            buttonStop.Location = new Point(343, 106);
+            buttonStop.Name = "buttonStop";
+            buttonStop.Size = new Size(90, 23);
+            buttonStop.TabIndex = 6;
+            buttonStop.Text = "Стоп";
+            buttonStop.UseVisualStyleBackColor = true;
+            buttonStop.Click += buttonStop_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(456, 196);
+            Controls.Add(buttonStop);
             Controls.Add(button1);
             Controls.Add(progressBar1);
             Controls.Add(toPath);
@@ -110,5 +122,6 @@
         private TextBox toPath;
         private ProgressBar progressBar1;
         private Button button1;
+        private Button buttonStop;
     }
 }
